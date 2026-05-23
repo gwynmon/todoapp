@@ -1,5 +1,7 @@
 Stack: sqlx RabbitMQ goose
 
+https://github.com/evrone/go-clean-template/blob/master/README_RU.md
+
 ### Endpoints
 #### Account Endpoints
 - [POST] **/api/register** - accepts JSON {name, email, password}
