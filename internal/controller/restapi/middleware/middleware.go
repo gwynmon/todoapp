@@ -8,8 +8,6 @@ import (
 	"todoapp/pkg/jwt"
 )
 
-type contextKey string
-
 const userIDKey contextKey = "userID"
 
 func AuthMiddleware(secret string, next http.Handler) http.Handler {

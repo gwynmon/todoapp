@@ -14,36 +14,34 @@ import (
 	"todoapp/internal/controller/restapi/middleware"
 	"todoapp/internal/repository/postgres"
 	"todoapp/internal/usecases/task"
+	"todoapp/pkg/logger"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 )
 
 func Run(cfg *config.Config) {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	logger.Info("starting application")
+	log := logger.Init("info")
 
 	ctx := context.Background()
 	db, err := sqlx.ConnectContext(ctx, "pgx", cfg.PostgresDSN)
 	if err != nil {
-		logger.Error("database connection failed", slog.String("error", err.Error()))
+		log.Error("database connection failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
 	defer func(db *sqlx.DB) {
 		err := db.Close()
 		if err != nil {
-			logger.Error("closing database connection failed", slog.String("error", err.Error()))
+			log.Error("closing database connection failed", slog.String("error", err.Error()))
 		}
 	}(db)
 
 	if err := db.PingContext(ctx); err != nil {
-		logger.Error("database ping failed", slog.String("error", err.Error()))
+		log.Error("database ping failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	logger.Info("database connected successfully")
+	log.Info("database connected successfully")
 
 	userRepo := postgres.NewUserRepository(db)
 	taskRepo := postgres.NewTaskRepo(db)
@@ -59,7 +57,6 @@ func Run(cfg *config.Config) {
 	mux.HandleFunc("POST /api/register", authHandler.Register)
 	mux.HandleFunc("POST /api/login", authHandler.Login)
 	mux.HandleFunc("POST /api/tasks", taskHandler.Create)
-	mux.HandleFunc("GET /api/tasks", taskHandler.GetByUser)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -71,7 +68,7 @@ func Run(cfg *config.Config) {
 		w.Write([]byte(`{"tasks":[]}`))
 	})
 
-	mux.Handle("/api/tasks", middleware.AuthMiddleware(cfg.JWTSecret, tasksMux))
+	mux.Handle("GET /api/tasks", middleware.AuthMiddleware(cfg.JWTSecret, http.HandlerFunc(taskHandler.GetByUser)))
 
 	srv := &http.Server{
 		Addr:         cfg.ServerPort,
@@ -82,9 +79,9 @@ func Run(cfg *config.Config) {
 	}
 
 	go func() {
-		logger.Info("http server started", slog.String("addr", cfg.ServerPort))
+		log.Info("http server started", slog.String("addr", cfg.ServerPort))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("server failed", slog.String("error", err.Error()))
+			log.Error("server failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
 	}()
@@ -93,14 +90,14 @@ func Run(cfg *config.Config) {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("shutting down gracefully...")
+	log.Info("shutting down gracefully...")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("server forced to shutdown", slog.String("error", err.Error()))
+		log.Error("server forced to shutdown", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
-	logger.Info("server stopped")
+	log.Info("server stopped")
 }
