@@ -9,11 +9,11 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"todoapp/internal/config"
+	"todoapp/config"
 	"todoapp/internal/controller/restapi"
+	"todoapp/internal/controller/restapi/middleware"
 	"todoapp/internal/repository/postgres"
-	"todoapp/internal/usecases"
+	"todoapp/internal/usecases/task"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
@@ -46,15 +46,20 @@ func Run(cfg *config.Config) {
 	logger.Info("database connected successfully")
 
 	userRepo := postgres.NewUserRepository(db)
+	taskRepo := postgres.NewTaskRepo(db)
 
-	authSvc := usecases.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpire)
+	authSvc := middleware.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpire)
+	taskSvc := task.NewService(taskRepo)
 
 	authHandler := restapi.NewAuthHandler(authSvc)
+	taskHandler := restapi.NewTaskHandler(taskSvc)
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /api/register", authHandler.Register)
 	mux.HandleFunc("POST /api/login", authHandler.Login)
+	mux.HandleFunc("POST /api/tasks", taskHandler.Create)
+	mux.HandleFunc("GET /api/tasks", taskHandler.GetByUser)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -66,7 +71,7 @@ func Run(cfg *config.Config) {
 		w.Write([]byte(`{"tasks":[]}`))
 	})
 
-	mux.Handle("/api/tasks", restapi.AuthMiddleware(cfg.JWTSecret, tasksMux))
+	mux.Handle("/api/tasks", middleware.AuthMiddleware(cfg.JWTSecret, tasksMux))
 
 	srv := &http.Server{
 		Addr:         cfg.ServerPort,

@@ -1,6 +1,8 @@
 package entity
 
-import "time"
+import (
+	"time"
+)
 
 type Task struct {
 	ID          int       `json:"id" db:"id"`

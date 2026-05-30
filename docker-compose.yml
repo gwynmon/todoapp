@@ -1,4 +1,15 @@
 services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRE=${JWT_EXPIRE}
+      - POSTGRES_DSN=postgres://${POSTGRES_USER:-todouser}:${POSTGRES_PASSWORD:-todopassword}@postgres:5432/${POSTGRES_DB:-tododb}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
   postgres:
     image: postgres:15-alpine
     container_name: tasks_postgres

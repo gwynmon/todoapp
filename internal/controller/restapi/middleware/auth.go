@@ -1,4 +1,4 @@
-package usecases
+package middleware
 
 import (
 	"context"

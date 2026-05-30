@@ -1,8 +1,7 @@
-package restapi
+package middleware
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -31,12 +30,4 @@ func AuthMiddleware(secret string, next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-func GetUserID(ctx context.Context) (int, error) {
-	id, ok := ctx.Value(userIDKey).(int)
-	if !ok {
-		return 0, errors.New("user id not found in context")
-	}
-	return id, nil
 }

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS tasks
     user_id     INT          NOT NULL,
     title       VARCHAR(255) NOT NULL,
     description TEXT,
-    status      VARCHAR(20) DEFAULT 'pending',
+    status      VARCHAR(20) DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
     deadline    TIMESTAMPTZ,
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     updated_at  TIMESTAMPTZ DEFAULT NOW(),

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/internal/repository/postgres/task_repository.go" dialect="GenericSQL" />
     <file url="file://$PROJECT_DIR$/internal/repository/postgres/user_repository.go" dialect="GenericSQL" />
-    <file url="file://$PROJECT_DIR$/migrations/20260522133426_init_schema.sql" dialect="PostgreSQL" />
   </component>
 </project>

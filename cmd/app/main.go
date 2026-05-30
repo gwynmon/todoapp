@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"todoapp/config"
 
 	"todoapp/internal/app"
-	"todoapp/internal/config"
 )
 
 func main() {

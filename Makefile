@@ -8,3 +8,9 @@ migrate-up:
 
 migrate-down:
 	@goose -dir migrations postgres "$(DB_DSN)" down
+
+run:
+	go run ./cmd/app
+
+up:
+	docker compose up -d
