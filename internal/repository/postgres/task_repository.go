@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"todoapp/internal/entity"
 
 	_ "github.com/jackc/pgx/v5/pgconn"
@@ -55,26 +56,52 @@ func (r *TaskRepo) GetByUser(ctx context.Context, userID int) ([]entity.Task, er
 	}
 	return tasks, nil
 }
+func (r *TaskRepo) Update(ctx context.Context, userID, taskID int, input entity.UpdateTaskInput) error {
+	query := `UPDATE tasks SET updated_at = NOW()`
+	args := []any{taskID, userID}
+	idx := 3
 
-func (r *TaskRepo) Update(ctx context.Context, task *entity.Task) error {
-	query := `UPDATE tasks SET title = :title, description = :description, 
-              status = :status, deadline = :deadline, updated_at = NOW()
-              WHERE id = :id AND user_id = :user_id`
+	if input.Title != nil {
+		query += fmt.Sprintf(", title = $%d", idx)
+		args = append(args, *input.Title)
+		idx++
+	}
+	if input.Description != nil {
+		query += fmt.Sprintf(", description = $%d", idx)
+		args = append(args, *input.Description)
+		idx++
+	}
+	if input.Status != nil {
+		query += fmt.Sprintf(", status = $%d", idx)
+		args = append(args, *input.Status)
+		idx++
+	}
+	if input.Deadline != nil {
+		query += fmt.Sprintf(", deadline = $%d", idx)
+		args = append(args, *input.Deadline)
+		idx++
+	}
 
-	res, err := r.db.NamedExecContext(ctx, query, task)
+	if idx == 3 {
+		return nil
+	}
+
+	query += ` WHERE id = $1 AND user_id = $2`
+
+	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
 
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
-		return entity.ErrTaskNotFound
+		return entity.ErrNotFoundOrAccessDenied
 	}
 	return nil
 }
 
-func (r *TaskRepo) Delete(ctx context.Context, id int) error {
-	res, err := r.db.ExecContext(ctx, "DELETE FROM tasks WHERE id = $1", id)
+func (r *TaskRepo) Delete(ctx context.Context, userID int, id int) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM tasks WHERE id = $1 AND user_id = $2", id, userID)
 	if err != nil {
 		return err
 	}

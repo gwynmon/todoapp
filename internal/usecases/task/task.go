@@ -13,7 +13,7 @@ func NewService(repo entity.TaskRepository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) Create(ctx context.Context, userID int, input entity.Task) error {
+func (s *Service) Create(ctx context.Context, userID int, input entity.CreateTaskInput) error {
 	task := &entity.Task{
 		UserID:      userID,
 		Title:       input.Title,
@@ -32,11 +32,18 @@ func (s *Service) GetByUser(ctx context.Context, userID int) ([]entity.Task, err
 	return s.repo.GetByUser(ctx, userID)
 }
 
-func (s *Service) Update(ctx context.Context, userID int, input entity.Task) error {
-	input.UserID = userID
-	return s.repo.Update(ctx, &input)
+func (s *Service) Update(ctx context.Context, userID, taskID int, input entity.UpdateTaskInput) error {
+	if input.Status != nil && !isValidStatusTransition(*input.Status) {
+		return entity.ErrInvalidStatus
+	}
+	return s.repo.Update(ctx, userID, taskID, input)
+}
+
+func isValidStatusTransition(status string) bool {
+	// TODO: добавь свою логику (todo -> in_progress -> done)
+	return status == "todo" || status == "in_progress" || status == "done"
 }
 
 func (s *Service) Delete(ctx context.Context, userID int, id int) error {
-	return s.repo.Delete(ctx, id)
+	return s.repo.Delete(ctx, userID, id)
 }

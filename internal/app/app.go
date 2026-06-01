@@ -12,12 +12,16 @@ import (
 	"todoapp/config"
 	"todoapp/internal/controller/restapi"
 	"todoapp/internal/controller/restapi/middleware"
+	"todoapp/internal/repository/mongo"
 	"todoapp/internal/repository/postgres"
+	"todoapp/internal/usecases/note"
 	"todoapp/internal/usecases/task"
 	"todoapp/pkg/logger"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
+	mongoDriver "go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func Run(cfg *config.Config) {
@@ -43,6 +47,26 @@ func Run(cfg *config.Config) {
 	}
 	log.Info("database connected successfully")
 
+	clientOpts := options.Client().ApplyURI(cfg.MongoDSN)
+	mongoClient, err := mongoDriver.Connect(clientOpts)
+	if err != nil {
+		log.Error("mongo connection failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := mongoClient.Ping(context.Background(), nil); err != nil {
+		log.Error("mongo ping failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer mongoClient.Disconnect(ctx)
+
+	noteRepo := mongo.NewNoteRepo(mongoClient.Database("tododb"))
+	noteSvc := note.NewService(noteRepo)
+	noteHandler := restapi.NewNoteHandler(noteSvc)
+
 	userRepo := postgres.NewUserRepository(db)
 	taskRepo := postgres.NewTaskRepo(db)
 
@@ -56,19 +80,22 @@ func Run(cfg *config.Config) {
 
 	mux.HandleFunc("POST /api/register", authHandler.Register)
 	mux.HandleFunc("POST /api/login", authHandler.Login)
-	mux.HandleFunc("POST /api/tasks", taskHandler.Create)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	tasksMux := http.NewServeMux()
-	tasksMux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"tasks":[]}`))
-	})
+	protected := func(h http.HandlerFunc) http.Handler {
+		return middleware.AuthMiddleware(cfg.JWTSecret, h)
+	}
 
-	mux.Handle("GET /api/tasks", middleware.AuthMiddleware(cfg.JWTSecret, http.HandlerFunc(taskHandler.GetByUser)))
+	mux.Handle("POST /api/tasks", protected(taskHandler.Create))
+	mux.Handle("GET /api/tasks", protected(taskHandler.GetByUser))
+	mux.Handle("PUT /api/tasks/{taskID}", protected(taskHandler.Update))
+	mux.Handle("DELETE /api/tasks/{taskID}", protected(taskHandler.Delete))
+	mux.Handle("POST /api/tasks/{taskID}/notes", protected(noteHandler.Create))
+	mux.Handle("GET /api/tasks/{taskID}/notes", protected(noteHandler.List))
+	mux.Handle("DELETE /api/notes/{noteID}", protected(noteHandler.Delete))
 
 	srv := &http.Server{
 		Addr:         cfg.ServerPort,

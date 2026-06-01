@@ -1,13 +1,17 @@
 package entity
 
-import "context"
+import (
+	"context"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+)
 
 type TaskRepository interface {
 	Create(ctx context.Context, task *Task) error
 	GetByID(ctx context.Context, id int) (*Task, error)
 	GetByUser(ctx context.Context, userID int) ([]Task, error)
-	Update(ctx context.Context, task *Task) error
-	Delete(ctx context.Context, id int) error
+	Update(ctx context.Context, userID int, taskID int, input UpdateTaskInput) error
+	Delete(ctx context.Context, userID int, id int) error
 }
 
 type UserRepository interface {
@@ -19,6 +23,6 @@ type UserRepository interface {
 type NoteRepository interface {
 	Create(ctx context.Context, note *Note) error
 	GetByTaskID(ctx context.Context, taskID int) ([]Note, error)
-	Delete(ctx context.Context, id string) error
-	DeleteByTaskID(ctx context.Context, taskID int) error
+	GetByID(ctx context.Context, noteID bson.ObjectID) (*Note, error)
+	Delete(ctx context.Context, noteID bson.ObjectID) error
 }
