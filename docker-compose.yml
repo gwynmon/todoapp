@@ -7,9 +7,12 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE=${JWT_EXPIRE}
       - POSTGRES_DSN=postgres://${POSTGRES_USER:-todouser}:${POSTGRES_PASSWORD:-todopassword}@postgres:5432/${POSTGRES_DB:-tododb}?sslmode=disable
+      - MONGO_DSN=mongodb://mongo:27017/tododb
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
   postgres:
     image: postgres:15-alpine
     container_name: tasks_postgres
@@ -17,17 +20,33 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-
     ports:
       - "${POSTGRES_PORT}:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=tododb
+  migrate:
+    image: ghcr.io/kukymbr/goose-docker:latest
+    environment:
+      - GOOSE_DRIVER=postgres
+      - GOOSE_DBSTRING=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
 volumes:
   postgres_data:
+  mongo_data:
