@@ -22,7 +22,7 @@ type UserRepository interface {
 
 type NoteRepository interface {
 	Create(ctx context.Context, note *Note) error
-	GetByTaskID(ctx context.Context, taskID int) ([]Note, error)
+	GetByTaskID(ctx context.Context, taskID int) ([]*Note, error)
 	GetByID(ctx context.Context, noteID bson.ObjectID) (*Note, error)
 	Delete(ctx context.Context, noteID bson.ObjectID) error
 }

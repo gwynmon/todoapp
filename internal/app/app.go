@@ -71,19 +71,19 @@ func Run(cfg *config.Config) {
 	taskRepo := postgres.NewTaskRepo(db)
 
 	authSvc := middleware.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpire)
-	taskSvc := task.NewService(taskRepo)
+	taskSvc := task.NewService(taskRepo, noteRepo)
 
-	authHandler := restapi.NewAuthHandler(authSvc)
-	taskHandler := restapi.NewTaskHandler(taskSvc)
+	authHandler := restapi.NewAuthHandler(authSvc, log)
+	healthHandler := restapi.NewHealthHandler(db, mongoClient, log)
+	taskHandler := restapi.NewTaskHandler(taskSvc, log)
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /api/register", authHandler.Register)
 	mux.HandleFunc("POST /api/login", authHandler.Login)
 
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+	mux.HandleFunc("GET /healthz", healthHandler.Liveness)
+	mux.HandleFunc("GET /readyz", healthHandler.Readiness)
 
 	protected := func(h http.HandlerFunc) http.Handler {
 		return middleware.AuthMiddleware(cfg.JWTSecret, h)
@@ -91,6 +91,7 @@ func Run(cfg *config.Config) {
 
 	mux.Handle("POST /api/tasks", protected(taskHandler.Create))
 	mux.Handle("GET /api/tasks", protected(taskHandler.GetByUser))
+	mux.Handle("GET /api/tasks/{taskID}", protected(taskHandler.GetByID))
 	mux.Handle("PUT /api/tasks/{taskID}", protected(taskHandler.Update))
 	mux.Handle("DELETE /api/tasks/{taskID}", protected(taskHandler.Delete))
 	mux.Handle("POST /api/tasks/{taskID}/notes", protected(noteHandler.Create))

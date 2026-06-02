@@ -2,15 +2,20 @@ package task
 
 import (
 	"context"
+	"errors"
 	"todoapp/internal/entity"
 )
 
 type Service struct {
-	repo entity.TaskRepository
+	taskRepo entity.TaskRepository
+	noteRepo entity.NoteRepository
 }
 
-func NewService(repo entity.TaskRepository) *Service {
-	return &Service{repo: repo}
+func NewService(taskRepo entity.TaskRepository, noteRepo entity.NoteRepository) *Service {
+	return &Service{
+		taskRepo: taskRepo,
+		noteRepo: noteRepo,
+	}
 }
 
 func (s *Service) Create(ctx context.Context, userID int, input entity.CreateTaskInput) error {
@@ -21,29 +26,55 @@ func (s *Service) Create(ctx context.Context, userID int, input entity.CreateTas
 		Deadline:    input.Deadline,
 		Status:      "todo",
 	}
-	return s.repo.Create(ctx, task)
+	return s.taskRepo.Create(ctx, task)
 }
 
-func (s *Service) GetByID(ctx context.Context, id int) (*entity.Task, error) {
-	return s.repo.GetByID(ctx, id)
+func (s *Service) GetByID(ctx context.Context, userID, taskID int) (*entity.Task, error) {
+	task, err := s.taskRepo.GetByID(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, entity.ErrTaskNotFound) {
+			return nil, entity.ErrNotFoundOrAccessDenied
+		}
+		return nil, err
+	}
+
+	if task.UserID != userID {
+		return nil, entity.ErrNotFoundOrAccessDenied
+	}
+
+	notes, err := s.noteRepo.GetByTaskID(ctx, taskID)
+	if err != nil {
+		task.Notes = []*entity.Note{}
+	} else {
+		task.Notes = notes
+	}
+
+	return task, nil
 }
 
 func (s *Service) GetByUser(ctx context.Context, userID int) ([]entity.Task, error) {
-	return s.repo.GetByUser(ctx, userID)
+	// TODO (п. 1.4): добавить фильтрацию по статусу и пагинацию
+	return s.taskRepo.GetByUser(ctx, userID)
 }
 
 func (s *Service) Update(ctx context.Context, userID, taskID int, input entity.UpdateTaskInput) error {
 	if input.Status != nil && !isValidStatusTransition(*input.Status) {
 		return entity.ErrInvalidStatus
 	}
-	return s.repo.Update(ctx, userID, taskID, input)
+	return s.taskRepo.Update(ctx, userID, taskID, input)
 }
 
 func isValidStatusTransition(status string) bool {
-	// TODO: добавь свою логику (todo -> in_progress -> done)
 	return status == "todo" || status == "in_progress" || status == "done"
 }
 
-func (s *Service) Delete(ctx context.Context, userID int, id int) error {
-	return s.repo.Delete(ctx, userID, id)
+func (s *Service) Delete(ctx context.Context, userID int, taskID int) error {
+	err := s.taskRepo.Delete(ctx, userID, taskID)
+	if err != nil {
+		if errors.Is(err, entity.ErrTaskNotFound) || errors.Is(err, entity.ErrNotFoundOrAccessDenied) {
+			return entity.ErrNotFoundOrAccessDenied
+		}
+		return err
+	}
+	return nil
 }

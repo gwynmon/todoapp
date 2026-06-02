@@ -29,7 +29,7 @@ func (r *NoteRepo) Create(ctx context.Context, note *entity.Note) error {
 	return nil
 }
 
-func (r *NoteRepo) GetByTaskID(ctx context.Context, taskID int) ([]entity.Note, error) {
+func (r *NoteRepo) GetByTaskID(ctx context.Context, taskID int) ([]*entity.Note, error) {
 	filter := bson.D{{Key: "task_id", Value: taskID}}
 	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 
@@ -39,7 +39,7 @@ func (r *NoteRepo) GetByTaskID(ctx context.Context, taskID int) ([]entity.Note, 
 	}
 	defer cursor.Close(ctx)
 
-	var notes []entity.Note
+	var notes []*entity.Note
 	if err := cursor.All(ctx, &notes); err != nil {
 		return nil, err
 	}

@@ -31,7 +31,7 @@ func (s *Service) Create(ctx context.Context, authorID, taskID int, text string,
 	return s.repo.Create(ctx, note)
 }
 
-func (s *Service) GetByTaskID(ctx context.Context, taskID int) ([]entity.Note, error) {
+func (s *Service) GetByTaskID(ctx context.Context, taskID int) ([]*entity.Note, error) {
 	return s.repo.GetByTaskID(ctx, taskID)
 }
 
