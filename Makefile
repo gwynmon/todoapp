@@ -1,20 +1,17 @@
 ifneq (,$(wildcard .env))
-	include .env
-	export
+    include .env
+    export
 endif
 
 POSTGRES_DSN ?= postgres://todouser:todopassword@localhost:5432/tododb?sslmode=disable
 
-.PHONY: init migrate-up migrate-down migrate-create run up down
+.PHONY: init migrate-up migrate-down migrate-create run up down logs test
 
 init:
 	@[ -f .env ] || cp .env.example .env
 
 migrate-up:
 	@goose -dir ./migrations postgres "$(POSTGRES_DSN)" up
-
-migrate-up-docker:
-	@docker compose exec -T app sh -c 'go install github.com/pressly/goose/v3/cmd/goose@latest && goose -dir /app/migrations postgres "postgres://todouser:todopassword@postgres:5432/tododb?sslmode=disable" up'
 
 migrate-down:
 	@goose -dir ./migrations postgres "$(POSTGRES_DSN)" down
@@ -30,3 +27,9 @@ up:
 
 down:
 	@docker compose down
+
+logs:
+	@docker compose logs -f app
+
+test:
+	@go test ./...
