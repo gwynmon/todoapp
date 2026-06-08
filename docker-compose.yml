@@ -4,12 +4,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - POSTGRES_DSN=postgres://${POSTGRES_USER:-todouser}:${POSTGRES_PASSWORD:-todopassword}@postgres:5432/${POSTGRES_DB:-tododb}?sslmode=disable
-      - MONGO_DSN=mongodb://mongo:27017/tododb
-      - REDIS_DSN=redis://redis:6379
-      - RABBITMQ_DSN=amqp://guest:guest@rabbitmq:5672/
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE=${JWT_EXPIRE}
+      - POSTGRES_DSN=postgres://${POSTGRES_USER:-todouser}:${POSTGRES_PASSWORD:-todopassword}@postgres:5432/${POSTGRES_DB:-tododb}?sslmode=disable
+      - MONGO_DSN=${MONGO_DSN:-mongodb://mongo:27017/tododb}
+      - REDIS_DSN=${REDIS_DSN:-redis://redis:6379/0}
+      - RABBITMQ_DSN=${RABBITMQ_DSN:-amqp://guest:guest@rabbitmq:5672/}
     depends_on:
       postgres:
         condition: service_healthy
