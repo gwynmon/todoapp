@@ -36,14 +36,18 @@ func (s *Service) Create(ctx context.Context, userID int, input entity.CreateTas
 	if err := s.taskRepo.Create(ctx, task); err != nil {
 		return err
 	}
-	s.cache.Delete(ctx, cache.TasksKey(userID))
-	s.producer.Publish(ctx, "task.created", broker.Event{
-		Type:      "task.created",
-		TaskID:    task.ID,
-		UserID:    userID,
-		Timestamp: time.Now(),
-		Payload:   map[string]any{"title": task.Title, "status": task.Status},
-	})
+	if s.cache != nil {
+		s.cache.Delete(ctx, cache.TasksKey(userID))
+	}
+	if s.producer != nil {
+		s.producer.Publish(ctx, "task.created", broker.Event{
+			Type:      "task.created",
+			TaskID:    task.ID,
+			UserID:    userID,
+			Timestamp: time.Now(),
+			Payload:   map[string]any{"title": task.Title, "status": task.Status},
+		})
+	}
 	return nil
 }
 
@@ -74,8 +78,8 @@ func (s *Service) GetByUser(ctx context.Context, userID int, filter entity.TaskF
 	if filter.Limit > 100 {
 		filter.Limit = 100
 	}
-	
-	if filter.Status == nil && filter.Offset == 0 {
+
+	if filter.Status == nil && filter.Offset == 0 && s.cache != nil {
 		var tasks []entity.Task
 		if err := s.cache.Get(ctx, cache.TasksKey(userID), &tasks); err == nil {
 			return tasks, nil
@@ -97,8 +101,10 @@ func (s *Service) Update(ctx context.Context, userID, taskID int, input entity.U
 	if err := s.taskRepo.Update(ctx, userID, taskID, input); err != nil {
 		return err
 	}
-	s.cache.Delete(ctx, cache.TasksKey(userID))
-	if input.Status != nil {
+	if s.cache != nil {
+		s.cache.Delete(ctx, cache.TasksKey(userID))
+	}
+	if s.producer != nil && input.Status != nil {
 		s.producer.Publish(ctx, "task.status_changed", broker.Event{
 			Type:      "task.status_changed",
 			TaskID:    taskID,
@@ -117,14 +123,18 @@ func (s *Service) Delete(ctx context.Context, userID int, taskID int) error {
 		}
 		return err
 	}
-	s.cache.Delete(ctx, cache.TasksKey(userID))
-	s.producer.Publish(ctx, "task.deleted", broker.Event{
-		Type:      "task.deleted",
-		TaskID:    taskID,
-		UserID:    userID,
-		Timestamp: time.Now(),
-		Payload:   nil,
-	})
+	if s.cache != nil {
+		s.cache.Delete(ctx, cache.TasksKey(userID))
+	}
+	if s.producer != nil {
+		s.producer.Publish(ctx, "task.deleted", broker.Event{
+			Type:      "task.deleted",
+			TaskID:    taskID,
+			UserID:    userID,
+			Timestamp: time.Now(),
+			Payload:   nil,
+		})
+	}
 	return nil
 }
 
