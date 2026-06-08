@@ -9,23 +9,19 @@ import (
 	"todoapp/internal/controller/restapi/middleware"
 	"todoapp/internal/entity"
 	"todoapp/internal/usecases/task"
-	"todoapp/pkg/cache"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/redis/go-redis/v9"
 )
 
 type TaskHandler struct {
 	svc      *task.Service
-	cache    *cache.Cache
 	validate *validator.Validate
 	logger   *slog.Logger
 }
 
-func NewTaskHandler(svc *task.Service, cache *cache.Cache, logger *slog.Logger) *TaskHandler {
+func NewTaskHandler(svc *task.Service, logger *slog.Logger) *TaskHandler {
 	return &TaskHandler{
 		svc:      svc,
-		cache:    cache,
 		validate: validator.New(),
 		logger:   logger,
 	}
@@ -54,9 +50,6 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Инвалидация кеша
-	h.cache.Delete(r.Context(), cache.TasksKey(userID))
-
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -67,35 +60,31 @@ func (h *TaskHandler) GetByUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cacheKey := cache.TasksKey(userID)
-	var tasks []entity.Task
-
-	err = h.cache.Get(r.Context(), cacheKey, &tasks)
-	if err == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Cache", "HIT")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(tasks)
-		return
+	filter := entity.TaskFilter{
+		Limit:  20,
+		Offset: 0,
+	}
+	if s := r.URL.Query().Get("status"); s != "" {
+		filter.Status = &s
+	}
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil {
+			filter.Limit = v
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil {
+			filter.Offset = v
+		}
 	}
 
-	if !errors.Is(err, redis.Nil) {
-		h.logger.Warn("cache get failed", slog.String("error", err.Error()))
-	}
-
-	tasks, err = h.svc.GetByUser(r.Context(), userID)
+	tasks, err := h.svc.GetByUser(r.Context(), userID, filter)
 	if err != nil {
 		writeJSONError(w, h.logger, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	if err := h.cache.Set(r.Context(), cacheKey, tasks); err != nil {
-		h.logger.Warn("cache set failed", slog.String("error", err.Error()))
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Cache", "MISS")
-	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(tasks)
 }
 
@@ -159,8 +148,6 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.cache.Delete(r.Context(), cache.TasksKey(userID))
-
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -186,8 +173,6 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, h.logger, "internal error", http.StatusInternalServerError)
 		return
 	}
-
-	h.cache.Delete(r.Context(), cache.TasksKey(userID))
 
 	w.WriteHeader(http.StatusNoContent)
 }

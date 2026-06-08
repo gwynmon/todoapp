@@ -45,13 +45,24 @@ func (r *TaskRepo) GetByID(ctx context.Context, id int) (*entity.Task, error) {
 	return &task, err
 }
 
-func (r *TaskRepo) GetByUser(ctx context.Context, userID int) ([]entity.Task, error) {
-	var tasks []entity.Task
-	err := r.db.SelectContext(ctx, &tasks,
-		`SELECT id, user_id, title, description, status, deadline, created_at, updated_at 
-		 FROM tasks WHERE user_id = $1 ORDER BY created_at DESC`, userID)
+func (r *TaskRepo) GetByUser(ctx context.Context, userID int, filter entity.TaskFilter) ([]entity.Task, error) {
+	query := `SELECT id, user_id, title, description, status, deadline, created_at, updated_at 
+              FROM tasks WHERE user_id = $1`
+	args := []any{userID}
+	idx := 2
 
-	if err != nil {
+	if filter.Status != nil {
+		query += fmt.Sprintf(" AND status = $%d", idx)
+		args = append(args, *filter.Status)
+		idx++
+	}
+
+	query += " ORDER BY created_at DESC"
+	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", idx, idx+1)
+	args = append(args, filter.Limit, filter.Offset)
+
+	var tasks []entity.Task
+	if err := r.db.SelectContext(ctx, &tasks, query, args...); err != nil {
 		return nil, err
 	}
 	return tasks, nil

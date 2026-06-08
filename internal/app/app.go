@@ -104,6 +104,7 @@ func Run(cfg *config.Config) {
 		os.Exit(1)
 	}
 	defer producer.Close()
+	log.Info("rabbitmq connected successfully")
 
 	// Repositories & Services
 	noteRepo := mongo.NewNoteRepo(mongoClient.Database("tododb"))
@@ -119,7 +120,7 @@ func Run(cfg *config.Config) {
 
 	authHandler := restapi.NewAuthHandler(authSvc, log)
 	healthHandler := restapi.NewHealthHandler(db, mongoClient, rdb, rabbitConn, log)
-	taskHandler := restapi.NewTaskHandler(taskSvc, taskCache, log)
+	taskHandler := restapi.NewTaskHandler(taskSvc, log)
 
 	// Router
 	mux := http.NewServeMux()

@@ -9,7 +9,7 @@ import (
 type TaskRepository interface {
 	Create(ctx context.Context, task *Task) error
 	GetByID(ctx context.Context, id int) (*Task, error)
-	GetByUser(ctx context.Context, userID int) ([]Task, error)
+	GetByUser(ctx context.Context, userID int, filter TaskFilter) ([]Task, error)
 	Update(ctx context.Context, userID int, taskID int, input UpdateTaskInput) error
 	Delete(ctx context.Context, userID int, id int) error
 }

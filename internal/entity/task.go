@@ -28,3 +28,9 @@ type UpdateTaskInput struct {
 	Status      *string    `json:"status"`
 	Deadline    *time.Time `json:"deadline"`
 }
+
+type TaskFilter struct {
+	Status *string
+	Limit  int
+	Offset int
+}

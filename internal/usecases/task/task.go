@@ -67,17 +67,27 @@ func (s *Service) GetByID(ctx context.Context, userID, taskID int) (*entity.Task
 	return task, nil
 }
 
-func (s *Service) GetByUser(ctx context.Context, userID int) ([]entity.Task, error) {
-	var tasks []entity.Task
-	if err := s.cache.Get(ctx, cache.TasksKey(userID), &tasks); err == nil {
+func (s *Service) GetByUser(ctx context.Context, userID int, filter entity.TaskFilter) ([]entity.Task, error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	
+	if filter.Status == nil && filter.Offset == 0 {
+		var tasks []entity.Task
+		if err := s.cache.Get(ctx, cache.TasksKey(userID), &tasks); err == nil {
+			return tasks, nil
+		}
+		tasks, err := s.taskRepo.GetByUser(ctx, userID, filter)
+		if err != nil {
+			return nil, err
+		}
+		s.cache.Set(ctx, cache.TasksKey(userID), tasks)
 		return tasks, nil
 	}
-	tasks, err := s.taskRepo.GetByUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	s.cache.Set(ctx, cache.TasksKey(userID), tasks)
-	return tasks, nil
+	return s.taskRepo.GetByUser(ctx, userID, filter)
 }
 
 func (s *Service) Update(ctx context.Context, userID, taskID int, input entity.UpdateTaskInput) error {
