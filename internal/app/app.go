@@ -16,10 +16,14 @@ import (
 	"todoapp/internal/repository/postgres"
 	"todoapp/internal/usecases/note"
 	"todoapp/internal/usecases/task"
+	"todoapp/pkg/broker"
+	"todoapp/pkg/cache"
 	"todoapp/pkg/logger"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/redis/go-redis/v9"
 	mongoDriver "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
@@ -28,41 +32,80 @@ func Run(cfg *config.Config) {
 	log := logger.Init("info")
 
 	ctx := context.Background()
+
+	// Postgres
 	db, err := sqlx.ConnectContext(ctx, "pgx", cfg.PostgresDSN)
 	if err != nil {
 		log.Error("database connection failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-
-	defer func(db *sqlx.DB) {
-		err := db.Close()
-		if err != nil {
+	defer func() {
+		if err := db.Close(); err != nil {
 			log.Error("closing database connection failed", slog.String("error", err.Error()))
 		}
-	}(db)
-
+	}()
 	if err := db.PingContext(ctx); err != nil {
 		log.Error("database ping failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	log.Info("database connected successfully")
+	log.Info("postgres connected successfully")
 
-	clientOpts := options.Client().ApplyURI(cfg.MongoDSN)
-	mongoClient, err := mongoDriver.Connect(clientOpts)
+	// MongoDB
+	mongoClient, err := mongoDriver.Connect(options.Client().ApplyURI(cfg.MongoDSN))
 	if err != nil {
 		log.Error("mongo connection failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := mongoClient.Ping(context.Background(), nil); err != nil {
+	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	if err := mongoClient.Ping(pingCtx, nil); err != nil {
 		log.Error("mongo ping failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	defer mongoClient.Disconnect(ctx)
+	cancel()
+	defer func() {
+		if err := mongoClient.Disconnect(context.Background()); err != nil {
+			log.Error("mongo disconnect failed", slog.String("error", err.Error()))
+		}
+	}()
+	log.Info("mongodb connected successfully")
 
+	// Redis
+	redisOpts, err := redis.ParseURL(cfg.RedisDSN)
+	if err != nil {
+		log.Error("redis dsn parse failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	rdb := redis.NewClient(redisOpts)
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Error("redis connection failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer func() {
+		if err := rdb.Close(); err != nil {
+			log.Error("redis close failed", slog.String("error", err.Error()))
+		}
+	}()
+	log.Info("redis connected successfully")
+
+	// RabbitMQ
+	rabbitConn, err := amqp.Dial(cfg.RabbitMQDSN)
+	if err != nil {
+		log.Error("rabbitmq connection failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer func() {
+		if err := rabbitConn.Close(); err != nil {
+			log.Error("rabbitmq close failed", slog.String("error", err.Error()))
+		}
+	}()
+	producer, err := broker.NewProducer(rabbitConn)
+	if err != nil {
+		log.Error("rabbitmq producer failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer producer.Close()
+
+	// Repositories & Services
 	noteRepo := mongo.NewNoteRepo(mongoClient.Database("tododb"))
 	noteSvc := note.NewService(noteRepo)
 	noteHandler := restapi.NewNoteHandler(noteSvc)
@@ -71,17 +114,18 @@ func Run(cfg *config.Config) {
 	taskRepo := postgres.NewTaskRepo(db)
 
 	authSvc := middleware.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpire)
-	taskSvc := task.NewService(taskRepo, noteRepo)
+	taskCache := cache.New(rdb, 5*time.Minute)
+	taskSvc := task.NewService(taskRepo, noteRepo, taskCache, producer)
 
 	authHandler := restapi.NewAuthHandler(authSvc, log)
-	healthHandler := restapi.NewHealthHandler(db, mongoClient, log)
-	taskHandler := restapi.NewTaskHandler(taskSvc, log)
+	healthHandler := restapi.NewHealthHandler(db, mongoClient, rdb, rabbitConn, log)
+	taskHandler := restapi.NewTaskHandler(taskSvc, taskCache, log)
 
+	// Router
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /api/register", authHandler.Register)
 	mux.HandleFunc("POST /api/login", authHandler.Login)
-
 	mux.HandleFunc("GET /healthz", healthHandler.Liveness)
 	mux.HandleFunc("GET /readyz", healthHandler.Readiness)
 
@@ -98,6 +142,7 @@ func Run(cfg *config.Config) {
 	mux.Handle("GET /api/tasks/{taskID}/notes", protected(noteHandler.List))
 	mux.Handle("DELETE /api/notes/{noteID}", protected(noteHandler.Delete))
 
+	// HTTP Server
 	srv := &http.Server{
 		Addr:         cfg.ServerPort,
 		Handler:      mux,
@@ -119,8 +164,8 @@ func Run(cfg *config.Config) {
 	<-quit
 
 	log.Info("shutting down gracefully...")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("server forced to shutdown", slog.String("error", err.Error()))

@@ -9,19 +9,23 @@ import (
 	"todoapp/internal/controller/restapi/middleware"
 	"todoapp/internal/entity"
 	"todoapp/internal/usecases/task"
+	"todoapp/pkg/cache"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/redis/go-redis/v9"
 )
 
 type TaskHandler struct {
 	svc      *task.Service
+	cache    *cache.Cache
 	validate *validator.Validate
 	logger   *slog.Logger
 }
 
-func NewTaskHandler(svc *task.Service, logger *slog.Logger) *TaskHandler {
+func NewTaskHandler(svc *task.Service, cache *cache.Cache, logger *slog.Logger) *TaskHandler {
 	return &TaskHandler{
 		svc:      svc,
+		cache:    cache,
 		validate: validator.New(),
 		logger:   logger,
 	}
@@ -50,6 +54,9 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Инвалидация кеша
+	h.cache.Delete(r.Context(), cache.TasksKey(userID))
+
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -60,14 +67,35 @@ func (h *TaskHandler) GetByUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: добавить поддержку query-параметров status, limit, offset
-	tasks, err := h.svc.GetByUser(r.Context(), userID)
+	cacheKey := cache.TasksKey(userID)
+	var tasks []entity.Task
+
+	err = h.cache.Get(r.Context(), cacheKey, &tasks)
+	if err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Cache", "HIT")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(tasks)
+		return
+	}
+
+	if !errors.Is(err, redis.Nil) {
+		h.logger.Warn("cache get failed", slog.String("error", err.Error()))
+	}
+
+	tasks, err = h.svc.GetByUser(r.Context(), userID)
 	if err != nil {
 		writeJSONError(w, h.logger, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
+	if err := h.cache.Set(r.Context(), cacheKey, tasks); err != nil {
+		h.logger.Warn("cache set failed", slog.String("error", err.Error()))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Cache", "MISS")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(tasks)
 }
 
@@ -88,7 +116,7 @@ func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	task, err := h.svc.GetByID(r.Context(), userID, taskID)
 	if err != nil {
 		if errors.Is(err, entity.ErrNotFoundOrAccessDenied) {
-			writeJSONError(w, h.logger, "task not found or access denied", http.StatusNotFound) // 404
+			writeJSONError(w, h.logger, "task not found or access denied", http.StatusNotFound)
 			return
 		}
 		writeJSONError(w, h.logger, "internal server error", http.StatusInternalServerError)
@@ -122,14 +150,16 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Update(r.Context(), userID, taskID, input); err != nil {
 		switch {
 		case errors.Is(err, entity.ErrNotFoundOrAccessDenied):
-			writeJSONError(w, h.logger, "not found or access denied", http.StatusNotFound) // 404
+			writeJSONError(w, h.logger, "not found or access denied", http.StatusNotFound)
 		case errors.Is(err, entity.ErrInvalidStatus):
-			writeJSONError(w, h.logger, "invalid status", http.StatusBadRequest) // 400
+			writeJSONError(w, h.logger, "invalid status", http.StatusBadRequest)
 		default:
-			writeJSONError(w, h.logger, "internal error", http.StatusInternalServerError) // 500
+			writeJSONError(w, h.logger, "internal error", http.StatusInternalServerError)
 		}
 		return
 	}
+
+	h.cache.Delete(r.Context(), cache.TasksKey(userID))
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -149,13 +179,15 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.Delete(r.Context(), userID, taskID); err != nil {
 		if errors.Is(err, entity.ErrNotFoundOrAccessDenied) {
-			writeJSONError(w, h.logger, "not found or access denied", http.StatusNotFound) // 404 вместо 500!
+			writeJSONError(w, h.logger, "not found or access denied", http.StatusNotFound)
 			return
 		}
 		h.logger.Error("failed to delete task", slog.Int("task_id", taskID), slog.String("error", err.Error()))
 		writeJSONError(w, h.logger, "internal error", http.StatusInternalServerError)
 		return
 	}
+
+	h.cache.Delete(r.Context(), cache.TasksKey(userID))
 
 	w.WriteHeader(http.StatusNoContent)
 }
