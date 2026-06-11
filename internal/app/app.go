@@ -109,8 +109,6 @@ func Run(cfg *config.Config) {
 
 	// Repositories & Services
 	noteRepo := mongo.NewNoteRepo(mongoClient.Database("tododb"))
-	noteSvc := note.NewService(noteRepo)
-	noteHandler := restapi.NewNoteHandler(noteSvc)
 
 	userRepo := postgres.NewUserRepository(db)
 	taskRepo := postgres.NewTaskRepo(db)
@@ -118,6 +116,8 @@ func Run(cfg *config.Config) {
 	authSvc := auth.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpire)
 	taskCache := cache.New(rdb, 5*time.Minute)
 	taskSvc := task.NewService(taskRepo, noteRepo, taskCache, producer, log)
+	noteSvc := note.NewService(noteRepo, taskRepo)
+	noteHandler := restapi.NewNoteHandler(noteSvc)
 	authHandler := restapi.NewAuthHandler(authSvc, log)
 	healthHandler := restapi.NewHealthHandler(db, mongoClient, rdb, rabbitConn, log)
 	taskHandler := restapi.NewTaskHandler(taskSvc, log)

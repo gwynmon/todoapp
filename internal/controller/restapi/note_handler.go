@@ -2,9 +2,11 @@ package restapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"todoapp/internal/controller/restapi/middleware"
+	"todoapp/internal/entity"
 	"todoapp/internal/usecases/note"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -24,7 +26,7 @@ func (h *NoteHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, nil, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	
+
 	taskID, err := strconv.Atoi(r.PathValue("taskID"))
 	if err != nil {
 		writeJSONError(w, nil, "invalid task id", http.StatusBadRequest)
@@ -41,6 +43,11 @@ func (h *NoteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.Create(r.Context(), userID, taskID, input.Text, input.Meta); err != nil {
+		if errors.Is(err, entity.ErrAccessDenied) {
+			writeJSONError(w, nil, err.Error(), http.StatusForbidden)
+			return
+		}
+
 		writeJSONError(w, nil, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -48,16 +55,29 @@ func (h *NoteHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NoteHandler) List(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.GetUserID(r.Context())
+	if err != nil {
+		writeJSONError(w, nil, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	taskID, err := strconv.Atoi(r.PathValue("taskID"))
 	if err != nil {
 		writeJSONError(w, nil, "invalid task id", http.StatusBadRequest)
 		return
 	}
-	notes, err := h.svc.GetByTaskID(r.Context(), taskID)
+
+	notes, err := h.svc.GetByTaskID(r.Context(), userID, taskID)
 	if err != nil {
+		if errors.Is(err, entity.ErrAccessDenied) {
+			writeJSONError(w, nil, err.Error(), http.StatusForbidden)
+			return
+		}
+
 		writeJSONError(w, nil, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(notes)
 }
@@ -75,6 +95,11 @@ func (h *NoteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.Delete(r.Context(), userID, noteID); err != nil {
+		if errors.Is(err, entity.ErrAccessDenied) {
+			writeJSONError(w, nil, err.Error(), http.StatusForbidden)
+			return
+		}
+		
 		writeJSONError(w, nil, err.Error(), http.StatusNotFound)
 		return
 	}

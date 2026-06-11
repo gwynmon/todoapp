@@ -38,7 +38,7 @@ func (m *mockNoteRepo) GetByID(ctx context.Context, noteID bson.ObjectID) (*enti
 func (m *mockNoteRepo) Delete(ctx context.Context, noteID bson.ObjectID) error { return nil }
 
 func newTestService(taskRepo entity.TaskRepository) *Service {
-	return NewService(taskRepo, &mockNoteRepo{}, nil, nil)
+	return NewService(taskRepo, &mockNoteRepo{}, nil, nil, nil)
 }
 
 func TestUpdate_InvalidStatus(t *testing.T) {

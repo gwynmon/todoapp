@@ -80,6 +80,8 @@ func (s *Service) GetByID(ctx context.Context, userID, taskID int) (*entity.Task
 }
 
 func (s *Service) GetByUser(ctx context.Context, userID int, filter entity.TaskFilter) ([]entity.Task, error) {
+	isDefaultRequest := filter.Status == nil && filter.Offset == 0 && filter.Limit <= 0
+
 	if filter.Limit <= 0 {
 		filter.Limit = 20
 	}
@@ -87,7 +89,7 @@ func (s *Service) GetByUser(ctx context.Context, userID int, filter entity.TaskF
 		filter.Limit = 100
 	}
 
-	if filter.Status == nil && filter.Offset == 0 && s.cache != nil {
+	if isDefaultRequest && s.cache != nil {
 		var tasks []entity.Task
 		if err := s.cache.Get(ctx, cache.TasksKey(userID), &tasks); err == nil {
 			return tasks, nil
@@ -113,13 +115,19 @@ func (s *Service) Update(ctx context.Context, userID, taskID int, input entity.U
 		s.cache.Delete(ctx, cache.TasksKey(userID))
 	}
 	if s.producer != nil && input.Status != nil {
-		s.producer.Publish(ctx, "task.status_changed", broker.Event{
+		if err := s.producer.Publish(ctx, "task.status_changed", broker.Event{
 			Type:      "task.status_changed",
 			TaskID:    taskID,
 			UserID:    userID,
 			Timestamp: time.Now(),
 			Payload:   map[string]any{"status": *input.Status},
-		})
+		}); err != nil {
+			s.log.Warn(
+				"failed to publish task.status_changed event",
+				slog.Int("task_id", taskID),
+				slog.String("error", err.Error()),
+			)
+		}
 	}
 	return nil
 }
@@ -135,13 +143,19 @@ func (s *Service) Delete(ctx context.Context, userID int, taskID int) error {
 		s.cache.Delete(ctx, cache.TasksKey(userID))
 	}
 	if s.producer != nil {
-		s.producer.Publish(ctx, "task.deleted", broker.Event{
+		if err := s.producer.Publish(ctx, "task.deleted", broker.Event{
 			Type:      "task.deleted",
 			TaskID:    taskID,
 			UserID:    userID,
 			Timestamp: time.Now(),
 			Payload:   nil,
-		})
+		}); err != nil {
+			s.log.Warn(
+				"failed to publish task.deleted event",
+				slog.Int("task_id", taskID),
+				slog.String("error", err.Error()),
+			)
+		}
 	}
 	return nil
 }
