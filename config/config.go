@@ -8,6 +8,7 @@ import (
 
 type Config struct {
 	ServerPort  string        `env:"SERVER_PORT" envDefault:":8080"`
+	LogLevel    string        `env:"LOG_LEVEL" envDefault:"info"`
 	PostgresDSN string        `env:"POSTGRES_DSN" envDefault:"postgres://todouser:changeme@localhost:5433/tododb?sslmode=disable"`
 	MongoDSN    string        `env:"MONGO_DSN" envDefault:"mongodb://localhost:27017/tododb"`
 	RedisDSN    string        `env:"REDIS_DSN" envDefault:"redis://localhost:6379/0"`

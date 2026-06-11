@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 	"todoapp/internal/entity"
 	"todoapp/pkg/broker"
@@ -14,14 +15,16 @@ type Service struct {
 	noteRepo entity.NoteRepository
 	cache    *cache.Cache
 	producer *broker.Producer
+	log      *slog.Logger
 }
 
-func NewService(taskRepo entity.TaskRepository, noteRepo entity.NoteRepository, cache *cache.Cache, producer *broker.Producer) *Service {
+func NewService(taskRepo entity.TaskRepository, noteRepo entity.NoteRepository, cache *cache.Cache, producer *broker.Producer, logger *slog.Logger) *Service {
 	return &Service{
 		taskRepo: taskRepo,
 		noteRepo: noteRepo,
 		cache:    cache,
 		producer: producer,
+		log:      logger,
 	}
 }
 
@@ -40,13 +43,18 @@ func (s *Service) Create(ctx context.Context, userID int, input entity.CreateTas
 		s.cache.Delete(ctx, cache.TasksKey(userID))
 	}
 	if s.producer != nil {
-		s.producer.Publish(ctx, "task.created", broker.Event{
+		if err := s.producer.Publish(ctx, "task.created", broker.Event{
 			Type:      "task.created",
 			TaskID:    task.ID,
 			UserID:    userID,
 			Timestamp: time.Now(),
 			Payload:   map[string]any{"title": task.Title, "status": task.Status},
-		})
+		}); err != nil {
+			s.log.Warn("failed to publish task.created event",
+				slog.Int("task_id", task.ID),
+				slog.String("error", err.Error()),
+			)
+		}
 	}
 	return nil
 }

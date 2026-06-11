@@ -5,19 +5,19 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"todoapp/internal/controller/restapi/middleware"
 	"todoapp/internal/entity"
+	"todoapp/internal/usecases/auth"
 
 	"github.com/go-playground/validator/v10"
 )
 
 type AuthHandler struct {
-	svc      *middleware.AuthService
+	svc      *auth.AuthService
 	validate *validator.Validate
 	logger   *slog.Logger
 }
 
-func NewAuthHandler(svc *middleware.AuthService, logger *slog.Logger) *AuthHandler {
+func NewAuthHandler(svc *auth.AuthService, logger *slog.Logger) *AuthHandler {
 	return &AuthHandler{
 		svc:      svc,
 		validate: validator.New(),

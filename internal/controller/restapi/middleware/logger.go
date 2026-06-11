@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 const reqIDKey contextKey = "request_id"
@@ -30,10 +28,9 @@ func Logger(log *slog.Logger, next http.Handler) http.Handler {
 		start := time.Now()
 		rw := newResponseWriter(w)
 
-		reqID := uuid.New().String()
-		ctx := context.WithValue(r.Context(), reqIDKey, reqID)
+		ctx := context.WithValue(r.Context(), reqIDKey, RequestIDKey)
 		r = r.WithContext(ctx)
-		w.Header().Set("X-Request-ID", reqID)
+		w.Header().Set("X-Request-ID", string(RequestIDKey))
 
 		next.ServeHTTP(rw, r)
 
@@ -42,7 +39,7 @@ func Logger(log *slog.Logger, next http.Handler) http.Handler {
 			slog.String("path", r.URL.Path),
 			slog.Int("status", rw.statusCode),
 			slog.Duration("latency_ms", time.Since(start)),
-			slog.String("request_id", reqID),
+			slog.String("request_id", string(RequestIDKey)),
 		)
 	})
 }

@@ -14,6 +14,7 @@ import (
 	"todoapp/internal/controller/restapi/middleware"
 	"todoapp/internal/repository/mongo"
 	"todoapp/internal/repository/postgres"
+	"todoapp/internal/usecases/auth"
 	"todoapp/internal/usecases/note"
 	"todoapp/internal/usecases/task"
 	"todoapp/pkg/broker"
@@ -29,7 +30,7 @@ import (
 )
 
 func Run(cfg *config.Config) {
-	log := logger.Init("info")
+	log := logger.Init(cfg.LogLevel)
 
 	ctx := context.Background()
 
@@ -114,10 +115,9 @@ func Run(cfg *config.Config) {
 	userRepo := postgres.NewUserRepository(db)
 	taskRepo := postgres.NewTaskRepo(db)
 
-	authSvc := middleware.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpire)
+	authSvc := auth.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpire)
 	taskCache := cache.New(rdb, 5*time.Minute)
-	taskSvc := task.NewService(taskRepo, noteRepo, taskCache, producer)
-
+	taskSvc := task.NewService(taskRepo, noteRepo, taskCache, producer, log)
 	authHandler := restapi.NewAuthHandler(authSvc, log)
 	healthHandler := restapi.NewHealthHandler(db, mongoClient, rdb, rabbitConn, log)
 	taskHandler := restapi.NewTaskHandler(taskSvc, log)
@@ -146,7 +146,7 @@ func Run(cfg *config.Config) {
 	// HTTP Server
 	srv := &http.Server{
 		Addr:         cfg.ServerPort,
-		Handler:      mux,
+		Handler:      middleware.Logger(log, mux),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,

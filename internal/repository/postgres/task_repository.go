@@ -37,7 +37,9 @@ func (r *TaskRepo) Create(ctx context.Context, task *entity.Task) error {
 
 func (r *TaskRepo) GetByID(ctx context.Context, id int) (*entity.Task, error) {
 	var task entity.Task
-	err := r.db.GetContext(ctx, &task, `SELECT * FROM tasks WHERE id = $1`, id)
+	err := r.db.GetContext(ctx, &task,
+		`SELECT id, user_id, title, description, status, deadline, created_at, updated_at 
+     FROM tasks WHERE id = $1`, id)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, entity.ErrTaskNotFound
