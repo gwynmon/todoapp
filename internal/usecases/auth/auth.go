@@ -11,21 +11,21 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthService struct {
+type Service struct {
 	repo      entity.UserRepository
 	jwtSecret string
 	jwtExpire time.Duration
 }
 
-func NewAuthService(repo entity.UserRepository, jwtSecret string, jwtExpire time.Duration) *AuthService {
-	return &AuthService{
+func NewAuthService(repo entity.UserRepository, jwtSecret string, jwtExpire time.Duration) *Service {
+	return &Service{
 		repo:      repo,
 		jwtSecret: jwtSecret,
 		jwtExpire: jwtExpire,
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, input entity.RegisterInput) error {
+func (s *Service) Register(ctx context.Context, input entity.RegisterInput) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (s *AuthService) Register(ctx context.Context, input entity.RegisterInput) 
 	return nil
 }
 
-func (s *AuthService) Login(ctx context.Context, input entity.LoginInput) (string, error) {
+func (s *Service) Login(ctx context.Context, input entity.LoginInput) (string, error) {
 	user, err := s.repo.GetByEmail(ctx, input.Email)
 	if err != nil {
 		if errors.Is(err, entity.ErrUserNotFound) {
