@@ -63,10 +63,12 @@ func (r *TaskRepo) GetByUser(ctx context.Context, userID int, filter entity.Task
 	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", idx, idx+1)
 	args = append(args, filter.Limit, filter.Offset)
 
-	var tasks []entity.Task
+	tasks := make([]entity.Task, 0)
+
 	if err := r.db.SelectContext(ctx, &tasks, query, args...); err != nil {
 		return nil, err
 	}
+
 	return tasks, nil
 }
 func (r *TaskRepo) Update(ctx context.Context, userID, taskID int, input entity.UpdateTaskInput) error {

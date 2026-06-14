@@ -7,16 +7,18 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ./bin/app ./cmd/app
+ARG SERVICE
+
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -o /bin/service \
+    ./cmd/${SERVICE}
 
 FROM alpine:3.19
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
-
-COPY --from=builder /app/bin/app .
+COPY --from=builder /bin/service /service
 
 EXPOSE 8080
 
-CMD ["./app"]
+CMD ["/service"]
