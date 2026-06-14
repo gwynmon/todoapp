@@ -60,10 +60,7 @@ func (h *TaskHandler) GetByUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filter := entity.TaskFilter{
-		Limit:  20,
-		Offset: 0,
-	}
+	filter := entity.TaskFilter{}
 	if s := r.URL.Query().Get("status"); s != "" {
 		filter.Status = &s
 	}
