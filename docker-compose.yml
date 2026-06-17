@@ -42,6 +42,19 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+  notifier-service:
+    build:
+      context: .
+      args:
+        SERVICE: notifier-service
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+    restart: unless-stopped
   postgres:
     image: postgres:15-alpine
     container_name: tasks_postgres

@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	AuthServerPort  string `env:"AUTH_SERVER_PORT" envDefault:":8081"`
-	TasksServerPort string `env:"TASKS_SERVER_PORT" envDefault:":8082"`
+	AuthServerPort     string `env:"AUTH_SERVER_PORT" envDefault:":8081"`
+	TasksServerPort    string `env:"TASKS_SERVER_PORT" envDefault:":8082"`
+	NotifierServerPort string `env:"NOTIFIER_SERVER_PORT" envDefault:":8083"`
 
 	LogLevel    string        `env:"LOG_LEVEL" envDefault:"info"`
 	PostgresDSN string        `env:"POSTGRES_DSN" envDefault:"postgres://todouser:changeme@localhost:5433/tododb?sslmode=disable"`
