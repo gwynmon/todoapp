@@ -30,7 +30,13 @@ func RunAuth(cfg *config.Config) {
 		log.Error("database connection failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Error("database close failed",
+				slog.String("error", err.Error()),
+			)
+		}
+	}()
 
 	userRepo := postgres.NewUserRepository(db)
 
@@ -60,9 +66,14 @@ func RunAuth(cfg *config.Config) {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	signalCtx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	<-signalCtx.Done()
 
 	shutdownCtx, cancel := context.WithTimeout(
 		context.Background(),
@@ -70,5 +81,7 @@ func RunAuth(cfg *config.Config) {
 	)
 	defer cancel()
 
-	_ = srv.Shutdown(shutdownCtx)
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error("shutdown failed", slog.String("error", err.Error()))
+	}
 }

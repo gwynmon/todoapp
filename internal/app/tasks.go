@@ -154,16 +154,27 @@ func RunTasks(cfg *config.Config) {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	signalCtx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	<-signalCtx.Done()
 
 	log.Info("shutting down gracefully...")
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Error("server forced to shutdown", slog.String("error", err.Error()))
+		log.Error("server forced to shutdown",
+			slog.String("error", err.Error()),
+		)
 		os.Exit(1)
 	}
 
