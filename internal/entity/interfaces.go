@@ -26,3 +26,7 @@ type NoteRepository interface {
 	GetByID(ctx context.Context, noteID bson.ObjectID) (*Note, error)
 	Delete(ctx context.Context, noteID bson.ObjectID) error
 }
+
+type NotificationRepository interface {
+	Create(ctx context.Context, notification *Notification) error
+}
