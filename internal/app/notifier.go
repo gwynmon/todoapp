@@ -2,13 +2,17 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"todoapp/pkg/broker"
+	"todoapp/internal/entity"
 
 	"todoapp/config"
+	mongorepo "todoapp/internal/repository/mongo"
+	notificationUC "todoapp/internal/usecases/notification"
+	"todoapp/pkg/broker"
 	"todoapp/pkg/logger"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -33,6 +37,15 @@ func RunNotifier(cfg *config.Config) {
 	defer mongoClient.Disconnect(context.Background())
 
 	log.Info("mongodb connected successfully")
+
+	notificationRepo := mongorepo.NewNotificationRepo(
+		mongoClient.Database("tododb"),
+	)
+
+	notificationSvc := notificationUC.NewService(
+		notificationRepo,
+		log,
+	)
 
 	rabbitConn, err := amqp.Dial(cfg.RabbitMQDSN)
 	if err != nil {
@@ -66,9 +79,33 @@ func RunNotifier(cfg *config.Config) {
 
 	go func() {
 		for msg := range messages {
+
+			var event entity.TaskEvent
+
+			if err := json.Unmarshal(msg.Body, &event); err != nil {
+				log.Error(
+					"event unmarshal failed",
+					slog.String("error", err.Error()),
+				)
+				continue
+			}
+
+			if err := notificationSvc.CreateFromEvent(
+				context.Background(),
+				event,
+			); err != nil {
+
+				log.Error(
+					"notification save failed",
+					slog.String("error", err.Error()),
+				)
+				continue
+			}
+
 			log.Info(
-				"event received",
-				slog.String("body", string(msg.Body)),
+				"notification saved",
+				slog.String("event_type", event.EventType),
+				slog.Int64("task_id", event.TaskID),
 			)
 		}
 	}()

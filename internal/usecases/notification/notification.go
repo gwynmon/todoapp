@@ -47,3 +47,52 @@ func (s *Service) CreateStatusChangedNotification(ctx context.Context, taskID in
 
 	return nil
 }
+func (s *Service) CreateFromEvent(ctx context.Context, event entity.TaskEvent) error {
+
+	notification := &entity.Notification{
+		UserID:    event.UserID,
+		TaskID:    event.TaskID,
+		Type:      event.EventType,
+		Message:   buildMessage(event),
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.repo.Create(ctx, notification); err != nil {
+		s.log.Error(
+			"create notification failed",
+			slog.String("error", err.Error()),
+		)
+		return err
+	}
+
+	return nil
+}
+func buildMessage(event entity.TaskEvent) string {
+	switch event.EventType {
+
+	case "task.created":
+		return fmt.Sprintf(
+			"Task %d created",
+			event.TaskID,
+		)
+
+	case "task.status_changed":
+		return fmt.Sprintf(
+			"Task %d status changed",
+			event.TaskID,
+		)
+
+	case "task.deleted":
+		return fmt.Sprintf(
+			"Task %d deleted",
+			event.TaskID,
+		)
+
+	default:
+		return fmt.Sprintf(
+			"Task %d event %s",
+			event.TaskID,
+			event.EventType,
+		)
+	}
+}
