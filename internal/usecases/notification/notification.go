@@ -67,6 +67,11 @@ func (s *Service) CreateFromEvent(ctx context.Context, event entity.TaskEvent) e
 
 	return nil
 }
+
+func (s *Service) ListByUserID(ctx context.Context, userID int64) ([]*entity.Notification, error) {
+	return s.repo.ListByUserID(ctx, userID)
+}
+
 func buildMessage(event entity.TaskEvent) string {
 	switch event.EventType {
 

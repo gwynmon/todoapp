@@ -29,4 +29,5 @@ type NoteRepository interface {
 
 type NotificationRepository interface {
 	Create(ctx context.Context, notification *Notification) error
+	ListByUserID(ctx context.Context, userID int64) ([]*Notification, error)
 }

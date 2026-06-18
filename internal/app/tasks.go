@@ -15,6 +15,7 @@ import (
 	"todoapp/internal/repository/mongo"
 	"todoapp/internal/repository/postgres"
 	"todoapp/internal/usecases/note"
+	"todoapp/internal/usecases/notification"
 	"todoapp/internal/usecases/task"
 	"todoapp/pkg/broker"
 	"todoapp/pkg/cache"
@@ -108,13 +109,15 @@ func RunTasks(cfg *config.Config) {
 
 	// Repositories & Services
 	noteRepo := mongo.NewNoteRepo(mongoClient.Database("tododb"))
-
+	notificationRepo := mongo.NewNotificationRepo(mongoClient.Database("tododb"))
 	taskRepo := postgres.NewTaskRepo(db)
 
 	taskCache := cache.New(rdb, 5*time.Minute)
 	taskSvc := task.NewService(taskRepo, noteRepo, taskCache, producer, log)
 	noteSvc := note.NewService(noteRepo, taskRepo)
 	noteHandler := restapi.NewNoteHandler(noteSvc)
+	notificationSvc := notification.NewService(notificationRepo, log)
+	notificationHandler := restapi.NewNotificationHandler(notificationSvc)
 	healthHandler := restapi.NewHealthHandler(db, mongoClient, rdb, rabbitConn, log)
 	taskHandler := restapi.NewTaskHandler(taskSvc, log)
 
@@ -136,6 +139,7 @@ func RunTasks(cfg *config.Config) {
 	mux.Handle("POST /api/tasks/{taskID}/notes", protected(noteHandler.Create))
 	mux.Handle("GET /api/tasks/{taskID}/notes", protected(noteHandler.List))
 	mux.Handle("DELETE /api/notes/{noteID}", protected(noteHandler.Delete))
+	mux.Handle("GET /api/notifications", protected(notificationHandler.List))
 
 	// HTTP Server
 	srv := &http.Server{
