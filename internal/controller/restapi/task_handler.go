@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 	"todoapp/internal/controller/restapi/middleware"
 	"todoapp/internal/entity"
 	"todoapp/internal/usecases/task"
@@ -172,4 +173,23 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *TaskHandler) GetUpcomingDeadlines(w http.ResponseWriter, r *http.Request) {
+	within := 24 * time.Hour
+	if withinParam := r.URL.Query().Get("within"); withinParam != "" {
+		if parsed, err := time.ParseDuration(withinParam); err == nil {
+			within = parsed
+		}
+	}
+
+	tasks, err := h.svc.GetUpcomingDeadlines(r.Context(), within)
+	if err != nil {
+		writeJSONError(w, h.logger, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(tasks)
 }

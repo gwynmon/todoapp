@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 	"todoapp/internal/entity"
 
 	"todoapp/config"
@@ -14,6 +15,7 @@ import (
 	notificationUC "todoapp/internal/usecases/notification"
 	"todoapp/pkg/broker"
 	"todoapp/pkg/logger"
+	"todoapp/pkg/tasksclient"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	mongoDriver "go.mongodb.org/mongo-driver/v2/mongo"
@@ -110,7 +112,16 @@ func RunNotifier(cfg *config.Config) {
 		}
 	}()
 
-	log.Info("notifier service started")
+	// Deadline checker
+	tasksClient := tasksclient.New(cfg.TasksServiceURL, cfg.InternalSecret)
+
+	deadlineCheckInterval := cfg.DeadlineCheckInterval
+	if deadlineCheckInterval <= 0 {
+		deadlineCheckInterval = 1 * time.Hour
+	}
+
+	ticker := time.NewTicker(deadlineCheckInterval)
+	defer ticker.Stop()
 
 	signalCtx, stop := signal.NotifyContext(
 		ctx,
@@ -119,7 +130,46 @@ func RunNotifier(cfg *config.Config) {
 	)
 	defer stop()
 
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				checkUpcomingDeadlines(signalCtx, tasksClient, notificationSvc, log)
+			case <-signalCtx.Done():
+				return
+			}
+		}
+	}()
+
+	log.Info("notifier service started")
+
 	<-signalCtx.Done()
 
 	log.Info("notifier service stopped")
+}
+
+func checkUpcomingDeadlines(
+	ctx context.Context,
+	tasksClient *tasksclient.Client,
+	notificationSvc *notificationUC.Service,
+	log *slog.Logger,
+) {
+	tasks, err := tasksClient.GetUpcomingDeadlines(ctx, 24*time.Hour)
+	if err != nil {
+		log.Error("failed to fetch upcoming deadlines", slog.String("error", err.Error()))
+		return
+	}
+
+	for _, t := range tasks {
+		if err := notificationSvc.CreateDeadlineNotification(ctx, t); err != nil {
+			log.Error(
+				"failed to create deadline notification",
+				slog.Int("task_id", t.ID),
+				slog.String("error", err.Error()),
+			)
+			continue
+		}
+	}
+
+	log.Info("deadline check completed", slog.Int("found", len(tasks)))
 }

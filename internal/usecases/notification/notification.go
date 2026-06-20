@@ -101,3 +101,14 @@ func buildMessage(event entity.TaskEvent) string {
 		)
 	}
 }
+
+func (s *Service) CreateDeadlineNotification(ctx context.Context, task entity.Task) error {
+	notification := &entity.Notification{
+		UserID:    int64(task.UserID),
+		TaskID:    int64(task.ID),
+		Type:      "task.deadline_approaching",
+		Message:   fmt.Sprintf("Task %d \"%s\" deadline approaches: %s", task.ID, task.Title, task.Deadline.Format(time.RFC3339)),
+		CreatedAt: time.Now(),
+	}
+	return s.repo.Create(ctx, notification)
+}

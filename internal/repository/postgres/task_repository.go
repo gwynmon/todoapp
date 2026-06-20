@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 	"todoapp/internal/entity"
 
 	_ "github.com/jackc/pgx/v5/pgconn"
@@ -125,4 +126,18 @@ func (r *TaskRepo) Delete(ctx context.Context, userID int, id int) error {
 		return entity.ErrTaskNotFound
 	}
 	return nil
+}
+
+func (r *TaskRepo) GetUpcomingDeadlines(ctx context.Context, within time.Duration) ([]entity.Task, error) {
+	query := `SELECT id, user_id, title, description, status, deadline, created_at, updated_at
+              FROM tasks
+              WHERE deadline IS NOT NULL
+                AND deadline BETWEEN NOW() AND NOW() + ($1 * INTERVAL '1 second')
+                AND status != 'done'`
+
+	var tasks []entity.Task
+	if err := r.db.SelectContext(ctx, &tasks, query, within.Seconds()); err != nil {
+		return nil, err
+	}
+	return tasks, nil
 }

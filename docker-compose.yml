@@ -31,6 +31,7 @@ services:
       - MONGO_DSN=${MONGO_DSN}
       - REDIS_DSN=${REDIS_DSN}
       - RABBITMQ_DSN=${RABBITMQ_DSN}
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,10 +50,15 @@ services:
         SERVICE: notifier-service
     env_file:
       - .env
+    environment:
+      - TASKS_SERVICE_URL=http://tasks-service:8082
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
     depends_on:
       rabbitmq:
         condition: service_healthy
       mongo:
+        condition: service_started
+      tasks-service:
         condition: service_started
     restart: unless-stopped
   postgres:

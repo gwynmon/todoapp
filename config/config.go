@@ -18,6 +18,10 @@ type Config struct {
 	RabbitMQDSN string        `env:"RABBITMQ_DSN" envDefault:"amqp://guest:guest@localhost:5672/"`
 	JWTSecret   string        `env:"JWT_SECRET" envDefault:"dev_secret"`
 	JWTExpire   time.Duration `env:"JWT_EXPIRE" envDefault:"24h"`
+
+	TasksServiceURL       string        `env:"TASKS_SERVICE_URL" envDefault:"http://localhost:8082"`
+	InternalSecret        string        `env:"INTERNAL_SECRET" envDefault:"internal_dev_secret"`
+	DeadlineCheckInterval time.Duration `env:"DEADLINE_CHECK_INTERVAL" envDefault:"1h"`
 }
 
 func Load() (*Config, error) {

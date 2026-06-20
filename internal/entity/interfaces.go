@@ -2,6 +2,7 @@ package entity
 
 import (
 	"context"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -12,6 +13,7 @@ type TaskRepository interface {
 	GetByUser(ctx context.Context, userID int, filter TaskFilter) ([]Task, error)
 	Update(ctx context.Context, userID int, taskID int, input UpdateTaskInput) error
 	Delete(ctx context.Context, userID int, id int) error
+	GetUpcomingDeadlines(ctx context.Context, within time.Duration) ([]Task, error)
 }
 
 type UserRepository interface {

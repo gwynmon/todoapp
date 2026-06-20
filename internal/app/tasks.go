@@ -141,6 +141,9 @@ func RunTasks(cfg *config.Config) {
 	mux.Handle("DELETE /api/notes/{noteID}", protected(noteHandler.Delete))
 	mux.Handle("GET /api/notifications", protected(notificationHandler.List))
 
+	mux.Handle("GET /internal/tasks/upcoming-deadlines",
+		middleware.InternalAuthMiddleware(cfg.InternalSecret, http.HandlerFunc(taskHandler.GetUpcomingDeadlines)))
+
 	// HTTP Server
 	srv := &http.Server{
 		Addr:         cfg.TasksServerPort,

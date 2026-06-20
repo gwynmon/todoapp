@@ -160,6 +160,10 @@ func (s *Service) Delete(ctx context.Context, userID int, taskID int) error {
 	return nil
 }
 
+func (s *Service) GetUpcomingDeadlines(ctx context.Context, within time.Duration) ([]entity.Task, error) {
+	return s.taskRepo.GetUpcomingDeadlines(ctx, within)
+}
+
 func isValidStatusTransition(status string) bool {
 	return status == "todo" || status == "in_progress" || status == "done"
 }
