@@ -50,7 +50,7 @@ func (c *Consumer) Consume() (<-chan amqp.Delivery, error) {
 	return c.channel.Consume(
 		c.queue,
 		"",
-		true, // auto ack
+		false,
 		false,
 		false,
 		false,

@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,6 +13,7 @@ import (
 	"todoapp/internal/entity"
 
 	"todoapp/config"
+	"todoapp/internal/controller/restapi"
 	mongorepo "todoapp/internal/repository/mongo"
 	notificationUC "todoapp/internal/usecases/notification"
 	"todoapp/pkg/broker"
@@ -83,13 +86,17 @@ func RunNotifier(cfg *config.Config) {
 
 			if err := json.Unmarshal(msg.Body, &event); err != nil {
 				log.Error("event unmarshal failed", slog.String("error", err.Error()))
+				msg.Nack(false, false)
 				continue
 			}
 
 			if err := notificationSvc.CreateFromEvent(context.Background(), event); err != nil {
 				log.Error("notification save failed", slog.String("error", err.Error()))
+				msg.Nack(false, true)
 				continue
 			}
+
+			msg.Ack(false)
 
 			log.Info("notification saved", slog.String("event_type", event.EventType), slog.Int64("task_id", event.TaskID))
 		}
@@ -120,9 +127,33 @@ func RunNotifier(cfg *config.Config) {
 		}
 	}()
 
+	// Health check HTTP server
+	healthHandler := restapi.NewNotifierHealthHandler(mongoClient, rabbitConn, log)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", healthHandler.Liveness)
+	mux.HandleFunc("GET /readyz", healthHandler.Readiness)
+
+	srv := &http.Server{
+		Addr:    cfg.NotifierServerPort,
+		Handler: mux,
+	}
+
+	go func() {
+		log.Info("notifier health server started", slog.String("addr", cfg.NotifierServerPort))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("notifier health server failed", slog.String("error", err.Error()))
+		}
+	}()
+
 	log.Info("notifier service started")
 
 	<-signalCtx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error("notifier health server shutdown failed", slog.String("error", err.Error()))
+	}
 
 	log.Info("notifier service stopped")
 }

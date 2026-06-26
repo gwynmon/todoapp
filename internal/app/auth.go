@@ -47,11 +47,14 @@ func RunAuth(cfg *config.Config) {
 	)
 
 	authHandler := restapi.NewAuthHandler(authSvc, log)
+	healthHandler := restapi.NewAuthHealthHandler(db, log)
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /api/register", authHandler.Register)
 	mux.HandleFunc("POST /api/login", authHandler.Login)
+	mux.HandleFunc("GET /healthz", healthHandler.Liveness)
+	mux.HandleFunc("GET /readyz", healthHandler.Readiness)
 
 	srv := &http.Server{
 		Addr:    cfg.AuthServerPort,
