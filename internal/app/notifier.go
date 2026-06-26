@@ -44,10 +44,7 @@ func RunNotifier(cfg *config.Config) {
 		mongoClient.Database("tododb"),
 	)
 
-	notificationSvc := notificationUC.NewService(
-		notificationRepo,
-		log,
-	)
+	notificationSvc := notificationUC.NewService(notificationRepo, log)
 
 	rabbitConn, err := amqp.Dial(cfg.RabbitMQDSN)
 	if err != nil {
@@ -85,30 +82,16 @@ func RunNotifier(cfg *config.Config) {
 			var event entity.TaskEvent
 
 			if err := json.Unmarshal(msg.Body, &event); err != nil {
-				log.Error(
-					"event unmarshal failed",
-					slog.String("error", err.Error()),
-				)
+				log.Error("event unmarshal failed", slog.String("error", err.Error()))
 				continue
 			}
 
-			if err := notificationSvc.CreateFromEvent(
-				context.Background(),
-				event,
-			); err != nil {
-
-				log.Error(
-					"notification save failed",
-					slog.String("error", err.Error()),
-				)
+			if err := notificationSvc.CreateFromEvent(context.Background(), event); err != nil {
+				log.Error("notification save failed", slog.String("error", err.Error()))
 				continue
 			}
 
-			log.Info(
-				"notification saved",
-				slog.String("event_type", event.EventType),
-				slog.Int64("task_id", event.TaskID),
-			)
+			log.Info("notification saved", slog.String("event_type", event.EventType), slog.Int64("task_id", event.TaskID))
 		}
 	}()
 
@@ -123,11 +106,7 @@ func RunNotifier(cfg *config.Config) {
 	ticker := time.NewTicker(deadlineCheckInterval)
 	defer ticker.Stop()
 
-	signalCtx, stop := signal.NotifyContext(
-		ctx,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-	)
+	signalCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	go func() {
@@ -148,12 +127,7 @@ func RunNotifier(cfg *config.Config) {
 	log.Info("notifier service stopped")
 }
 
-func checkUpcomingDeadlines(
-	ctx context.Context,
-	tasksClient *tasksclient.Client,
-	notificationSvc *notificationUC.Service,
-	log *slog.Logger,
-) {
+func checkUpcomingDeadlines(ctx context.Context, tasksClient *tasksclient.Client, notificationSvc *notificationUC.Service, log *slog.Logger) {
 	tasks, err := tasksClient.GetUpcomingDeadlines(ctx, 24*time.Hour)
 	if err != nil {
 		log.Error("failed to fetch upcoming deadlines", slog.String("error", err.Error()))
@@ -162,11 +136,7 @@ func checkUpcomingDeadlines(
 
 	for _, t := range tasks {
 		if err := notificationSvc.CreateDeadlineNotification(ctx, t); err != nil {
-			log.Error(
-				"failed to create deadline notification",
-				slog.Int("task_id", t.ID),
-				slog.String("error", err.Error()),
-			)
+			log.Error("failed to create deadline notification", slog.Int("task_id", t.ID), slog.String("error", err.Error()))
 			continue
 		}
 	}

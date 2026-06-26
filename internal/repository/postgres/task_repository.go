@@ -135,7 +135,7 @@ func (r *TaskRepo) GetUpcomingDeadlines(ctx context.Context, within time.Duratio
                 AND deadline BETWEEN NOW() AND NOW() + ($1 * INTERVAL '1 second')
                 AND status != 'done'`
 
-	var tasks []entity.Task
+	tasks := make([]entity.Task, 0)
 	if err := r.db.SelectContext(ctx, &tasks, query, within.Seconds()); err != nil {
 		return nil, err
 	}

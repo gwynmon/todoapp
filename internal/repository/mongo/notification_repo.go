@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"errors"
 
 	"todoapp/internal/entity"
 
@@ -41,4 +42,22 @@ func (r *NotificationRepo) ListByUserID(ctx context.Context, userID int64) ([]*e
 	}
 
 	return notifications, nil
+}
+
+func (r *NotificationRepo) ExistsDeadlineNotification(ctx context.Context, taskID int64) (bool, error) {
+	filter := bson.M{
+		"task_id": taskID,
+		"type":    "task.deadline_approaching",
+	}
+
+	err := r.collection.FindOne(ctx, filter).Err()
+
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }

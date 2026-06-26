@@ -103,6 +103,15 @@ func buildMessage(event entity.TaskEvent) string {
 }
 
 func (s *Service) CreateDeadlineNotification(ctx context.Context, task entity.Task) error {
+	exists, err := s.repo.ExistsDeadlineNotification(ctx, int64(task.ID))
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+	
 	notification := &entity.Notification{
 		UserID:    int64(task.UserID),
 		TaskID:    int64(task.ID),
